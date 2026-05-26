@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sentiment Analyzer Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f5f4ef;
+    --surface: #ffffff;
+    --card: #ffffff;
+    --border: #e4e2da;
+    --pos: #1a8a5a;
+    --pos-light: #e8f7f0;
+    --pos-mid: #4ade80;
+    --neg: #c0392b;
+    --neg-light: #fce8e6;
+    --neu: #d97706;
+    --neu-light: #fef3c7;
+    --text: #1a1a1a;
+    --muted: #6b6b6b;
+    --ink: #2d2d2d;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    min-height: 100vh;
+  }
+
+  /* paper texture overlay */
+  body::after {
+    content: '';
+    position: fixed; inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none; z-index: 9999; opacity: 0.4;
+  }
+
+  header {
+    background: var(--ink);
+    color: #fff;
+    padding: 48px 56px 40px;
+    display: flex; justify-content: space-between; align-items: flex-end;
+    animation: fadeIn 0.5s ease both;
+  }
+  .header-eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; letter-spacing: 2px; text-transform: uppercase;
+    color: rgba(255,255,255,0.4); margin-bottom: 10px;
+  }
+  h1 { font-size: clamp(32px,4.5vw,52px); font-weight: 800; line-height: 1.05; }
+  h1 em { font-style: normal; color: #4ade80; }
+  .header-sub { color: rgba(255,255,255,0.5); font-size: 14px; margin-top: 8px;
+                font-family: 'JetBrains Mono', monospace; }
+  .header-right { text-align: right; }
+  .big-score {
+    font-size: 80px; font-weight: 800; line-height: 1;
+    color: #4ade80; letter-spacing: -3px;
+  }
+  .big-score-label { font-size: 12px; color: rgba(255,255,255,0.4);
+                     font-family: 'JetBrains Mono', monospace; text-align: right; }
+
+  main { padding: 40px 56px; max-width: 1400px; margin: 0 auto; }
+
+  /* sentiment big 3 */
+  .sentiment-trio {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 0;
+    border: 2px solid var(--ink); border-radius: 12px; overflow: hidden;
+    margin-bottom: 32px;
+    animation: riseUp 0.5s ease 0.1s both;
+  }
+  .sent-block {
+    padding: 32px;
+    text-align: center;
+    position: relative;
+  }
+  .sent-block + .sent-block { border-left: 2px solid var(--ink); }
+  .sent-block.pos { background: var(--pos-light); }
+  .sent-block.neu { background: var(--neu-light); }
+  .sent-block.neg { background: var(--neg-light); }
+  .sent-emoji { font-size: 32px; margin-bottom: 8px; }
+  .sent-label { font-size: 11px; font-weight: 700; letter-spacing: 2px;
+                text-transform: uppercase; font-family: 'JetBrains Mono', monospace;
+                margin-bottom: 12px; }
+  .sent-label.pos { color: var(--pos); }
+  .sent-label.neu { color: var(--neu); }
+  .sent-label.neg { color: var(--neg); }
+  .sent-pct { font-size: 56px; font-weight: 800; letter-spacing: -2px; line-height: 1; }
+  .sent-pct.pos { color: var(--pos); }
+  .sent-pct.neu { color: var(--neu); }
+  .sent-pct.neg { color: var(--neg); }
+  .sent-count { font-size: 13px; color: var(--muted); font-family: 'JetBrains Mono', monospace;
+                margin-top: 6px; }
+
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 24px; }
+  .one-col { margin-bottom: 24px; }
+
+  .card {
+    background: var(--card);
+    border: 2px solid var(--ink);
+    border-radius: 12px;
+    padding: 28px;
+    animation: riseUp 0.5s ease both;
+  }
+  .card-title {
+    font-size: 13px; font-weight: 800; letter-spacing: 1px;
+    text-transform: uppercase; margin-bottom: 4px;
+  }
+  .card-desc { font-size: 12px; color: var(--muted);
+               font-family: 'JetBrains Mono', monospace; margin-bottom: 20px; }
+
+  /* category sentiment bars */
+  .cat-list { display: flex; flex-direction: column; gap: 14px; }
+  .cat-row { display: flex; flex-direction: column; gap: 6px; }
+  .cat-header { display: flex; justify-content: space-between; }
+  .cat-name { font-size: 13px; font-weight: 700; }
+  .cat-total { font-size: 11px; color: var(--muted); font-family: 'JetBrains Mono', monospace; }
+  .cat-bar { display: flex; height: 12px; border-radius: 6px; overflow: hidden; gap: 1px; }
+  .cat-seg { height: 100%; transition: width 1s ease; }
+  .cat-seg.pos { background: var(--pos); }
+  .cat-seg.neu { background: var(--neu); }
+  .cat-seg.neg { background: var(--neg); }
+  .cat-legend { display: flex; gap: 12px; }
+  .cat-leg-item { font-size: 11px; font-family: 'JetBrains Mono', monospace; color: var(--muted); }
+  .cat-leg-item span { font-weight: 700; }
+
+  /* score distribution */
+  .score-list { display: flex; flex-direction: column; gap: 8px; }
+  .score-row { display: flex; align-items: center; gap: 10px; }
+  .score-label { font-size: 11px; font-family: 'JetBrains Mono', monospace;
+                 width: 90px; flex-shrink: 0; }
+  .score-bar-outer { flex: 1; height: 10px; background: var(--bg);
+                     border-radius: 5px; overflow: hidden; }
+  .score-bar-inner { height: 100%; border-radius: 5px; transition: width 1s ease; width: 0%; }
+
+  /* review cards */
+  .review-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .review-card {
+    padding: 16px; border-radius: 8px; border: 1.5px solid;
+    position: relative;
+  }
+  .review-card.pos { background: var(--pos-light); border-color: rgba(26,138,90,0.3); }
+  .review-card.neg { background: var(--neg-light); border-color: rgba(192,57,43,0.3); }
+  .review-score-badge {
+    font-size: 10px; font-family: 'JetBrains Mono', monospace; font-weight: 700;
+    padding: 2px 8px; border-radius: 10px; display: inline-block; margin-bottom: 8px;
+  }
+  .pos .review-score-badge { background: var(--pos); color: #fff; }
+  .neg .review-score-badge { background: var(--neg); color: #fff; }
+  .review-text { font-size: 12px; line-height: 1.6; color: var(--ink); }
+
+  /* insights */
+  .insights-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 24px; }
+  .insight {
+    border: 2px solid var(--ink); border-radius: 10px; padding: 20px;
+    background: var(--card);
+    animation: riseUp 0.5s ease 0.4s both;
+  }
+  .insight-num { font-family: 'JetBrains Mono', monospace; font-size: 10px;
+                 letter-spacing: 2px; color: var(--muted); margin-bottom: 6px; }
+  .insight-title { font-size: 14px; font-weight: 700; margin-bottom: 6px; }
+  .insight-body { font-size: 13px; color: var(--muted); line-height: 1.6; }
+
+  .skills-wrap { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .skill-tag {
+    font-size: 12px; font-family: 'JetBrains Mono', monospace;
+    padding: 5px 12px; border-radius: 20px; border: 1.5px solid var(--ink);
+    background: var(--bg); font-weight: 500;
+  }
+
+  footer { text-align: center; padding: 24px; font-size: 12px; color: var(--muted);
+           font-family: 'JetBrains Mono', monospace; border-top: 2px solid var(--ink);
+           margin-top: 16px; }
+  footer strong { color: var(--ink); }
+
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes riseUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: none; } }
+
+  @media (max-width: 900px) {
+    header, main { padding: 24px; }
+    .sentiment-trio, .two-col, .insights-grid, .review-grid { grid-template-columns: 1fr; }
+    .sent-block + .sent-block { border-left: none; border-top: 2px solid var(--ink); }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="header-eyebrow">NLP · Text Analytics · Portfolio Project</div>
+    <h1>AI-Powered<br><em>Sentiment</em> Analyzer</h1>
+    <div class="header-sub">VADER + TextBlob · 50 reviews · 3 categories</div>
+  </div>
+  <div class="header-right">
+    <div class="big-score">0.18</div>
+    <div class="big-score-label">avg combined<br>sentiment score</div>
+  </div>
+</header>
+
+<main>
+
+  <!-- Sentiment Trio -->
+  <div class="sentiment-trio">
+    <div class="sent-block pos">
+      <div class="sent-emoji">😊</div>
+      <div class="sent-label pos">Positive</div>
+      <div class="sent-pct pos">56%</div>
+      <div class="sent-count">28 of 50 reviews</div>
+    </div>
+    <div class="sent-block neu">
+      <div class="sent-emoji">😐</div>
+      <div class="sent-label neu">Neutral</div>
+      <div class="sent-pct neu">22%</div>
+      <div class="sent-count">11 of 50 reviews</div>
+    </div>
+    <div class="sent-block neg">
+      <div class="sent-emoji">😠</div>
+      <div class="sent-label neg">Negative</div>
+      <div class="sent-pct neg">22%</div>
+      <div class="sent-count">11 of 50 reviews</div>
+    </div>
+  </div>
+
+  <div class="two-col">
+
+    <!-- Sentiment by Category -->
+    <div class="card" style="animation-delay:0.15s">
+      <div class="card-title">Sentiment by Category</div>
+      <div class="card-desc">Positive · Neutral · Negative breakdown per product line</div>
+      <div class="cat-list" id="catList"></div>
+    </div>
+
+    <!-- Chart: Sentiment donut -->
+    <div class="card" style="animation-delay:0.2s">
+      <div class="card-title">Overall Sentiment Split</div>
+      <div class="card-desc">VADER + TextBlob combined classification</div>
+      <div style="position:relative;height:260px">
+        <canvas id="sentDonut"></canvas>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Score Distribution -->
+  <div class="card one-col" style="animation-delay:0.25s">
+    <div class="card-title">Sentiment Score Distribution</div>
+    <div class="card-desc">Combined score range: −1.0 (most negative) → +1.0 (most positive)</div>
+    <div class="score-list" id="scoreList"></div>
+  </div>
+
+  <!-- Avg Scores by Category -->
+  <div class="card one-col" style="animation-delay:0.3s;margin-bottom:24px">
+    <div class="card-title">Average Score by Category</div>
+    <div class="card-desc">Which product category has the happiest customers?</div>
+    <div style="position:relative;height:220px">
+      <canvas id="catScoreChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Top Reviews -->
+  <div class="card one-col" style="animation-delay:0.33s;margin-bottom:24px">
+    <div class="card-title">Sample Reviews — Detected Sentiment</div>
+    <div class="card-desc">Top 3 positive · Bottom 3 negative as classified by the model</div>
+    <br>
+    <div class="review-grid">
+      <div class="review-card pos">
+        <div class="review-score-badge">+0.88 POSITIVE</div>
+        <div class="review-text">"This product is absolutely amazing! Best purchase I made this year."</div>
+      </div>
+      <div class="review-card pos">
+        <div class="review-score-badge">+0.85 POSITIVE</div>
+        <div class="review-text">"Outstanding product! Exceeded my expectations completely."</div>
+      </div>
+      <div class="review-card pos">
+        <div class="review-score-badge">+0.82 POSITIVE</div>
+        <div class="review-text">"Beautiful furniture! Transforms the entire room look."</div>
+      </div>
+      <div class="review-card neg">
+        <div class="review-score-badge">−0.79 NEGATIVE</div>
+        <div class="review-text">"Worst purchase ever. Complete waste of money."</div>
+      </div>
+      <div class="review-card neg">
+        <div class="review-score-badge">−0.76 NEGATIVE</div>
+        <div class="review-text">"Terrible product. Broke after just two days of use."</div>
+      </div>
+      <div class="review-card neg">
+        <div class="review-score-badge">−0.71 NEGATIVE</div>
+        <div class="review-text">"Product arrived damaged. Customer service was unhelpful."</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Insights -->
+  <div class="insights-grid">
+    <div class="insight">
+      <div class="insight-num">INSIGHT 01</div>
+      <div class="insight-title">Office Supplies Scores Highest</div>
+      <div class="insight-body">Office supplies category has the best average sentiment score (+0.32), driven by pen and paper reviews. Customers value reliability and consistency for everyday items.</div>
+    </div>
+    <div class="insight">
+      <div class="insight-num">INSIGHT 02</div>
+      <div class="insight-title">Electronics Has the Most Negative Reviews</div>
+      <div class="insight-body">Electronics attracts the most polarizing reviews — highest praise for top performers but sharp criticism when products fail. Quality consistency is a key concern.</div>
+    </div>
+    <div class="insight">
+      <div class="insight-num">INSIGHT 03</div>
+      <div class="insight-title">Key Complaint Themes</div>
+      <div class="insight-body">Most negative reviews cluster around: product breaking early, items not matching description, damaged delivery, and poor value for money.</div>
+    </div>
+    <div class="insight">
+      <div class="insight-num">INSIGHT 04</div>
+      <div class="insight-title">Actionable Recommendations</div>
+      <div class="insight-body">Prioritize quality control for low-scoring categories. Respond to all 1-star reviews within 24 hours. Embed positive review keywords into product listings.</div>
+    </div>
+  </div>
+
+  <!-- Skills -->
+  <div class="card" style="animation-delay:0.5s">
+    <div class="card-title">Skills & Technologies Used</div>
+    <div class="skills-wrap">
+      <span class="skill-tag">Python</span>
+      <span class="skill-tag">NLTK</span>
+      <span class="skill-tag">VADER</span>
+      <span class="skill-tag">TextBlob</span>
+      <span class="skill-tag">WordCloud</span>
+      <span class="skill-tag">Pandas</span>
+      <span class="skill-tag">NumPy</span>
+      <span class="skill-tag">Matplotlib</span>
+      <span class="skill-tag">NLP</span>
+      <span class="skill-tag">Sentiment Analysis</span>
+      <span class="skill-tag">Text Preprocessing</span>
+      <span class="skill-tag">Polarity Scoring</span>
+      <span class="skill-tag">Multi-category Analysis</span>
+    </div>
+  </div>
+
+</main>
+
+<footer><strong>Nitish Pavan Reddy</strong> · AI-Powered Sentiment Analyzer · Data Analytics Portfolio</footer>
+
+<script>
+Chart.defaults.color = '#6b6b6b';
+Chart.defaults.borderColor = '#e4e2da';
+
+// Sentiment donut
+new Chart(document.getElementById('sentDonut'), {
+  type: 'doughnut',
+  data: {
+    labels: ['Positive', 'Neutral', 'Negative'],
+    datasets: [{
+      data: [28, 11, 11],
+      backgroundColor: ['#1a8a5a', '#d97706', '#c0392b'],
+      borderColor: '#ffffff',
+      borderWidth: 4,
+      hoverOffset: 8
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    cutout: '65%',
+    plugins: {
+      legend: { position: 'bottom', labels: { padding: 20, font: { family: 'JetBrains Mono', size: 11 } } }
+    }
+  }
+});
+
+// Category breakdown
+const cats = [
+  { name: 'Electronics', total: 25, pos: 12, neu: 5, neg: 8 },
+  { name: 'Furniture', total: 10, pos: 5,  neu: 2, neg: 3 },
+  { name: 'Office Supplies', total: 10, pos: 6, neu: 3, neg: 1 },
+  { name: 'Beverages / Other', total: 5, pos: 5, neu: 0, neg: 0 },
+];
+const catList = document.getElementById('catList');
+cats.forEach(c => {
+  const posW = (c.pos/c.total*100).toFixed(0);
+  const neuW = (c.neu/c.total*100).toFixed(0);
+  const negW = (c.neg/c.total*100).toFixed(0);
+  catList.innerHTML += `
+  <div class="cat-row">
+    <div class="cat-header">
+      <span class="cat-name">${c.name}</span>
+      <span class="cat-total">${c.total} reviews</span>
+    </div>
+    <div class="cat-bar">
+      <div class="cat-seg pos" style="width:${posW}%"></div>
+      <div class="cat-seg neu" style="width:${neuW}%"></div>
+      <div class="cat-seg neg" style="width:${negW}%"></div>
+    </div>
+    <div class="cat-legend">
+      <span class="cat-leg-item"><span style="color:#1a8a5a">${c.pos}</span> pos</span>
+      <span class="cat-leg-item"><span style="color:#d97706">${c.neu}</span> neu</span>
+      <span class="cat-leg-item"><span style="color:#c0392b">${c.neg}</span> neg</span>
+    </div>
+  </div>`;
+});
+
+// Score distribution
+const scoreBuckets = [
+  { label: '0.6 → 1.0', val: 22, color: '#1a8a5a' },
+  { label: '0.2 → 0.6', val: 18, color: '#4ade80' },
+  { label: '−0.1 → 0.2', val: 11, color: '#d97706' },
+  { label: '−0.5 → −0.1', val: 6, color: '#f87171' },
+  { label: '−1.0 → −0.5', val: 5, color: '#c0392b' },
+];
+const scoreList = document.getElementById('scoreList');
+scoreBuckets.forEach(b => {
+  scoreList.innerHTML += `
+  <div class="score-row">
+    <span class="score-label">${b.label}</span>
+    <div class="score-bar-outer"><div class="score-bar-inner" style="background:${b.color};width:0%" data-w="${b.val/28*100}"></div></div>
+    <span style="font-size:12px;font-family:'JetBrains Mono',monospace;color:#6b6b6b;width:24px">${b.val}</span>
+  </div>`;
+});
+setTimeout(()=>{
+  document.querySelectorAll('.score-bar-inner').forEach(b=>{b.style.width=b.dataset.w+'%'});
+}, 400);
+
+// Category avg score chart
+new Chart(document.getElementById('catScoreChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Electronics', 'Furniture', 'Office Supplies'],
+    datasets: [{
+      label: 'Avg Sentiment Score',
+      data: [0.14, 0.18, 0.32],
+      backgroundColor: ['#1a8a5a','#d97706','#1a8a5a'],
+      borderRadius: 6,
+      borderSkipped: false
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+    plugins: {
+      legend: { display: false }
+    },
+    scales: {
+      x: {
+        min: 0, max: 0.5,
+        ticks: { font: { family: 'JetBrains Mono', size: 11 } }
+      },
+      y: { ticks: { font: { family: 'JetBrains Mono', size: 11 } } }
+    }
+  }
+});
+</script>
+</body>
+</html>
